@@ -1,49 +1,53 @@
 import streamlit as st
-import numpy as np
+from prophet import Prophet
+st.title("Stock Predictor")
+import yfinance as yf
+from datetime import date
+from prophet.plot import plot_plotly
+from plotly import graph_objs as go
+START="2015-01-01"
+TODAY=date.today().strftime("%Y-%m-%d")
+stocks=("NET","NLSN","TSLA","DASH","BRN.AX","STLD","NYSE","DVN","MRO","UWMC","APPL","NASDAO")
+selected_stock=st.selectbox("Select dataset for prediction",stocks)
+n_years=st.slider("Years of prediction:",1,4)
+period=n_years*365
+@st.cache
+def load_data(ticker):
+  data=yf.download(ticker,START,TODAY)
+  data.reset_index(inplace=True)
+  return data
+data_load_state=st.text("Load data...")
+data=load_data(selected_stock)
+data_load_state.text("Loading data...done!")
+st.subheader("Raw data")
+st.write(data.tail())
+def plot_raw_data():
+  fig=go.Figure() 
+  fig.add_trace(go.Scatter(x=data["Date"],y=data["Open"],name="stock_open"))
+  fig.add_trace(go.Scatter(x=data["Date"],y=data["Close"],name="stock_close"))
+  fig.layout.update(title_text="Time Series Data",xaxis_rangeslider_visible=True)
+  st.plotly_chart(fig)
 
-# Interactive Streamlit elements, like these sliders, return their value.
-# This gives you an extremely simple interaction model.
-iterations = st.sidebar.slider("Level of detail", 2, 20, 10, 1)
-separation = st.sidebar.slider("Separation", 0.7, 2.0, 0.7885)
+plot_raw_data()
 
-# Non-interactive elements return a placeholder to their location
-# in the app. Here we're storing progress_bar to update it later.
-progress_bar = st.sidebar.progress(0)
 
-# These two elements will be filled in later, so we create a placeholder
-# for them using st.empty()
-frame_text = st.sidebar.empty()
-image = st.empty()
+ 
 
-m, n, s = 960, 640, 400
-x = np.linspace(-m / s, m / s, num=m).reshape((1, m))
-y = np.linspace(-n / s, n / s, num=n).reshape((n, 1))
-
-for frame_num, a in enumerate(np.linspace(0.0, 4 * np.pi, 100)):
-    # Here were setting value for these two elements.
-    progress_bar.progress(frame_num)
-    frame_text.text("Frame %i/100" % (frame_num + 1))
-
-    # Performing some fractal wizardry.
-    c = separation * np.exp(1j * a)
-    Z = np.tile(x, (n, 1)) + 1j * np.tile(y, (1, m))
-    C = np.full((n, m), c)
-    M = np.full((n, m), True, dtype=bool)
-    N = np.zeros((n, m))
-
-    for i in range(iterations):
-        Z[M] = Z[M] * Z[M] + C[M]
-        M[np.abs(Z) > 2] = False
-        N[M] = i
-
-    # Update the image placeholder by calling the image() function on it.
-    image.image(1.0 - (N / N.max()), use_column_width=True)
-
-# We clear elements by calling empty on them.
-progress_bar.empty()
-frame_text.empty()
-
-# Streamlit widgets automatically run the script from top to bottom. Since
-# this button is not connected to any other logic, it just causes a plain
-# rerun.
-st.button("Re-run")
+df_train=data[["Date","Close"]]
+df_train=df_train.rename(columns={"Date":"ds","Close":"y"})
+m=Prophet()
+m.fit(df_train)
+future=m.make_future_dataframe(periods=period)
+forecast=m.predict(future)
+st.subheader("Forecast data")
+st.write("Please Note:This is not 100% accurate. Please do not blame me if you lose money.")
+st.write(forecast.tail())
+st.write("forecast data")
+fig1=plot_plotly(m,forecast)
+st.plotly_chart(fig1)
+st.write("forecast components")
+fig2=m.plot_components(forecast)
+st.write(fig2)
+  
+  
+  
